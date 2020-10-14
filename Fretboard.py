@@ -39,7 +39,7 @@ class Note:
 
         return 12 + octave * 12 + offset
 
-    def midi_to_str(pitch:int) -> str:
+    def midi_to_str(pitch:int, prefer_flats=False) -> str:
         # Recover octave
         octave = 0
         while pitch >= 24:
@@ -50,25 +50,25 @@ class Note:
         if pitch == 0:
             note = 'C'
         elif pitch == 1:
-            note = 'C#'
+            note = 'Db' if prefer_flats else 'C#'
         elif pitch == 2:
             note = 'D'
         elif pitch == 3:
-            note = 'D#'
+            note = 'Eb' if prefer_flats else 'D#'
         elif pitch == 4:
             note = 'E'
         elif pitch == 5:
             note = 'F'
         elif pitch == 6:
-            note = 'F#'
+            note = 'Gb' if prefer_flats else 'F#'
         elif pitch == 7:
             note = 'G'
         elif pitch == 8:
-            note = 'G#'
+            note = 'Ab' if prefer_flats else 'G#'
         elif pitch == 9:
             note = 'A'
         elif pitch == 10:
-            note = 'A#'
+            note = 'Bb' if prefer_flats else 'A#'
         elif pitch == 11:
             note = 'B'
         else:
@@ -96,17 +96,23 @@ class Note:
             ret.midi_pitch -= Note.str_to_midi(other)
         return ret
 
+    def to_str(self, prefer_flats=False):
+        return Note.midi_to_str(self.midi_pitch, prefer_flats=prefer_flats)
+
     def __str__(self):
-        return Note.midi_to_str(self.midi_pitch)
+        return self.to_str(prefer_flats=False)
 
 class Fretboard:
     # Pixels per mm
-    PPMM = 4
+    PPMM = 8
     # Colors for each note
-    COLORS = {'A':(0.71,0,0), 'B':(0,0.314,0.647), 'C':(0,0.647,0.016), 'D':(0,0.8,0.945),
-        'E':(0.835,0.627,0), 'F':(0.675,0.675,0.675), 'G':(0.353,0,0.576)}
+    COLORS = {'A':(0.71,0,0), 'B':(0,0.314,0.647), 'C':(0,0.647,0.016), 'D':(0,0.8,0.945), 'E':(0.835,0.627,0),
+        'F':(0.675,0.675,0.675), 'G':(0.353,0,0.576), 'frets':(0.2,0.2,0.2), 'strings':(0.6,0.6,0.6)}
+    # Variables to let empty spaces on the sides
+    WIDTH_RATIO = 1.1
+    HEIGHT_RATIO = 1.5
 
-    def __init__(self, tuning:[Note]=[Note('E2'),Note('A2'),Note('D3'),Note('G3'),Note('B3'),Note('E4')],
+    def __init__(self, tuning:[Note]=[Note('E4'),Note('B3'),Note('G3'),Note('D3'),Note('A2'),Note('E2')],
      scale:int=628, lefty:bool=False, width_nut:int=43, width_twelve:int=52) -> None:
         self.tuning = tuning
         self.scale = scale
@@ -118,11 +124,17 @@ class Fretboard:
     def get_up_dir(self) -> int:
         return -1 if self.lefty else 1
 
-    def get_origin_x(self) -> int:
-        return self.scale/2 if self.lefty else 0
+    def get_origin_x(self) -> float:
+        return ((Fretboard.WIDTH_RATIO*self.scale/2) - (Fretboard.WIDTH_RATIO-1)*0.5*0.5*self.scale) if self.lefty else (Fretboard.WIDTH_RATIO-1)*0.5*0.5*self.scale
+
+    def get_origin_y(self) -> float:
+        return (0.5*(self.width_twelve-self.width_nut + self.width_twelve*(Fretboard.HEIGHT_RATIO-1)))
 
     def get_fret_pos(self, fret:int) -> float:
         return self.scale*(1-(2**(-float(fret)/12)))
+
+    def get_fret_slot_pos(self, fret:int) -> float:
+        return self.scale*(1-(2**(-float(2*fret-1)/24)))
 
     def get_width_at(self, dist:float) -> float:
         # Height of the triangle formed by the two sides
@@ -132,53 +144,92 @@ class Fretboard:
     def fret_string(self, string:int, fret:int) -> None:
         self.fretted_notes.append((string, fret))
 
-    def write_to_png(self, name="out.png") -> None:
-        WIDTH = 1 + int(self.scale * Fretboard.PPMM / 2)
-        HEIGHT = 1 + self.width_twelve * Fretboard.PPMM
+    def write_to_png(self, name="out.png", prefer_flats=False) -> None:
+        WIDTH = int(self.scale * Fretboard.PPMM * Fretboard.WIDTH_RATIO / 2)
+        HEIGHT = int(self.width_twelve * Fretboard.PPMM * Fretboard.HEIGHT_RATIO)
 
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
         ctx = cairo.Context(surface)
-        #ctx.scale(WIDTH, HEIGHT)  # Normalizing the canvas
 
         # Draw each fret
-        ctx.set_source_rgb(0.2, 0.2, 0.2)
+        ctx.set_source_rgb(*Fretboard.COLORS['frets'])
         for i in range(0, 12+1):
-            ctx.move_to(Fretboard.PPMM*self.get_origin_x(), 0)
+            ctx.move_to(Fretboard.PPMM*self.get_origin_x(), Fretboard.PPMM*self.get_origin_y())
             fret_pos = self.get_fret_pos(i)
             fret_width = self.get_width_at(fret_pos)
-            ctx.rel_move_to(self.get_up_dir()*Fretboard.PPMM*fret_pos, Fretboard.PPMM*(0.5*(self.width_twelve-fret_width)))
+            ctx.rel_move_to(self.get_up_dir()*Fretboard.PPMM*fret_pos, -Fretboard.PPMM*(0.5*(fret_width-self.width_nut)))
             ctx.rel_line_to(0, Fretboard.PPMM*fret_width)
         ctx.set_line_width(3*Fretboard.PPMM/4)
         ctx.stroke()
 
+        # Draw fretboard dots
+        ctx.set_source_rgb(*Fretboard.COLORS['frets'])
+        ctx.set_line_width(3*Fretboard.PPMM/4)
+        for i in [3,5,7,9,12]:
+            ctx.arc(Fretboard.PPMM*(self.get_origin_x() + self.get_up_dir()*self.get_fret_slot_pos(i)), Fretboard.PPMM*(self.get_origin_y() + 0.5*self.width_nut), Fretboard.PPMM*0.004*self.scale, 0, 2*np.pi)
+            ctx.fill()
+
         # Draw each string
-        ctx.set_source_rgb(0.6, 0.6, 0.6)
+        ctx.set_source_rgb(*Fretboard.COLORS['strings'])
         for i in range(len(self.tuning)):
             ctx.set_line_width(Fretboard.PPMM/2 + i*1.5*Fretboard.PPMM/len(self.tuning))
-            ctx.move_to(Fretboard.PPMM*self.get_origin_x(), Fretboard.PPMM*(0.5*(self.width_twelve-self.width_nut) + i*(self.width_nut/(len(self.tuning)-1))))
-            if(self.lefty):
-                ctx.line_to(0, Fretboard.PPMM*(i*(self.width_twelve/(len(self.tuning)-1))))
-            else:
-                ctx.line_to(Fretboard.PPMM*self.scale/2, Fretboard.PPMM*(i*(self.width_twelve/(len(self.tuning)-1))))
+            ctx.move_to(Fretboard.PPMM*self.get_origin_x(), Fretboard.PPMM*(self.get_origin_y() + i*(self.width_nut/(len(self.tuning)-1))))
+            ctx.line_to(Fretboard.PPMM*(Fretboard.WIDTH_RATIO*0.5*self.scale - self.get_origin_x()), Fretboard.PPMM*(self.get_origin_y() - 0.5*(self.width_twelve-self.width_nut) + i*(self.width_twelve/(len(self.tuning)-1))))
             ctx.stroke()
 
-        # Add each note
-        #cr.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-        ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-        ctx.set_font_size(Fretboard.PPMM*1.5*self.width_nut/len(self.tuning))
-        for fn in self.fretted_notes:
-            n = self.tuning[fn[0]]+fn[1]
-            n_str = str(n)
-            ctx.set_source_rgb(*Fretboard.COLORS[n_str[0]])
+        # Add strings tuning
+        font_size = Fretboard.PPMM*1.5*self.width_nut/len(self.tuning)
+        for i in range(len(self.tuning)):
+            ctx.move_to(Fretboard.PPMM*self.get_origin_x(), Fretboard.PPMM*(self.get_origin_y() + self.width_nut*i/(len(self.tuning)-1)))
+            if(self.lefty):
+                ctx.rel_move_to(0.25*font_size, 0.33*font_size)
+            else:
+                ctx.rel_move_to(-1.25*font_size, 0.33*font_size)
+            # Finally add text
+            # Retrieve the letter of this note, discarding digits
+            n_str = self.tuning[i].to_str(prefer_flats=prefer_flats)
             while(n_str[-1].isdigit()):
                 n_str = n_str[:-1]
-            # TODO
-            ctx.move_to(0, Fretboard.PPMM*self.width_twelve)
-            ctx.show_text(n_str)
+            ctx.set_source_rgb(*Fretboard.COLORS[n_str[0]])
+            ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            ctx.set_font_size(font_size)
+            ctx.show_text(n_str[0])
+            if(len(n_str)>1):
+                ctx.select_font_face("Arial", cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
+                ctx.set_font_size(0.75*font_size)
+                ctx.show_text(n_str[1])
+
+        # Add each note
+        for fn in self.fretted_notes:
+            # Move to the fret slot of the selected string
+            slot_pos = self.get_fret_slot_pos(fn[1])
+            ctx.move_to(Fretboard.PPMM*(self.get_origin_x() + self.get_up_dir()*slot_pos), Fretboard.PPMM*(self.get_origin_y() - 0.5*(self.get_width_at(slot_pos)-self.width_nut) + self.get_width_at(slot_pos)*fn[0]/(len(self.tuning)-1)))
+            # Move to the corner of the room where the letter will be written
+            ctx.rel_move_to(-0.4*font_size, 0.33*font_size)
+            # Compute note
+            n = self.tuning[fn[0]]+fn[1]
+            # Retrieve the letter of this note, discarding digits
+            n_str = n.to_str(prefer_flats=prefer_flats)
+            while(n_str[-1].isdigit()):
+                n_str = n_str[:-1]
+            # Finally add text
+            ctx.set_source_rgb(*Fretboard.COLORS[n_str[0]])
+            ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            ctx.set_font_size(font_size)
+            ctx.show_text(n_str[0])
+            if(len(n_str)>1):
+                ctx.select_font_face("Arial", cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
+                ctx.set_font_size(0.75*font_size)
+                ctx.show_text(n_str[1])
 
         surface.write_to_png(name)
 
 if __name__ == '__main__':
-    fb = Fretboard(lefty=True)
-    fb.fret_string(0, 7)
-    fb.write_to_png()
+    fb = Fretboard(tuning=[Note('E4'),Note('B3'),Note('G3'),Note('D3'),Note('A2'),Note('D2')], lefty=True)
+    fb.fret_string(0, 3)
+    fb.fret_string(1, 3)
+    fb.fret_string(2, 3)
+    fb.fret_string(3, 5)
+    fb.fret_string(4, 5)
+    fb.fret_string(5, 3)
+    fb.write_to_png(prefer_flats=True)
