@@ -181,11 +181,6 @@ class Fretboard:
         font_size = Fretboard.PPMM*1.5*self.width_nut/len(self.tuning)
         for i in range(len(self.tuning)):
             ctx.move_to(Fretboard.PPMM*self.get_origin_x(), Fretboard.PPMM*(self.get_origin_y() + self.width_nut*i/(len(self.tuning)-1)))
-            if(self.lefty):
-                ctx.rel_move_to(0.25*font_size, 0.33*font_size)
-            else:
-                ctx.rel_move_to(-1.25*font_size, 0.33*font_size)
-            # Finally add text
             # Retrieve the letter of this note, discarding digits
             n_str = self.tuning[i].to_str(prefer_flats=prefer_flats)
             while(n_str[-1].isdigit()):
@@ -193,6 +188,12 @@ class Fretboard:
             ctx.set_source_rgb(*Fretboard.COLORS[n_str[0]])
             ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
             ctx.set_font_size(font_size)
+            _, _, w, h, _, _ = ctx.text_extents(n_str)
+            if(self.lefty):
+                ctx.rel_move_to(2.5*Fretboard.PPMM, h/2)
+            else:
+                ctx.rel_move_to(-2.5*Fretboard.PPMM - w, h/2)
+            # Finally add text
             ctx.show_text(n_str[0])
             if(len(n_str)>1):
                 ctx.select_font_face("Arial", cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
@@ -204,8 +205,6 @@ class Fretboard:
             # Move to the fret slot of the selected string
             slot_pos = self.get_fret_slot_pos(fn[1])
             ctx.move_to(Fretboard.PPMM*(self.get_origin_x() + self.get_up_dir()*slot_pos), Fretboard.PPMM*(self.get_origin_y() - 0.5*(self.get_width_at(slot_pos)-self.width_nut) + self.get_width_at(slot_pos)*fn[0]/(len(self.tuning)-1)))
-            # Move to the corner of the room where the letter will be written
-            ctx.rel_move_to(-0.4*font_size, 0.33*font_size)
             # Compute note
             n = self.tuning[fn[0]]+fn[1]
             # Retrieve the letter of this note, discarding digits
@@ -216,6 +215,9 @@ class Fretboard:
             ctx.set_source_rgb(*Fretboard.COLORS[n_str[0]])
             ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
             ctx.set_font_size(font_size)
+            # Move to the corner of the place where the letter will be written
+            _, _, w, h, _, _ = ctx.text_extents(n_str)
+            ctx.rel_move_to(-w/2, h/2)
             ctx.show_text(n_str[0])
             if(len(n_str)>1):
                 ctx.select_font_face("Arial", cairo.FONT_SLANT_ITALIC, cairo.FONT_WEIGHT_NORMAL)
