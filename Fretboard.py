@@ -116,7 +116,6 @@ class Note:
         """
         return self.midi_pitch%12 == other.midi_pitch%12
 
-
     def __add__(self, other):
         ret = Note(str(self))
         if isinstance(other, int):
@@ -141,12 +140,38 @@ class Note:
         return self.midi_pitch == other.midi_pitch
 
     def to_str(self, prefer_flats=False) -> str:
+        """Returns the str corresponding to the note
+
+        :param prefer_flats : bool
+            will return flat instead of sharps if True, for instance 'Bb4' instead of 'A#4'
+        """
         return Note.midi_to_str(self.midi_pitch, prefer_flats=prefer_flats)
 
     def __str__(self) -> str:
         return self.to_str(prefer_flats=False)
 
 class Fretboard:
+    """This class represents the fretboard of a string instrument, such as a guitar or a bass
+
+    :param tuning : [Note]
+        A list of the notes to which the instrument is tuned to, starting with the highest note. Guitar standard tuning by default.
+    :param title : str
+        The title of the fretboard diagram
+    :param scale : int
+        The total scale of the instrument, in millimeters
+    :param nb_frets : int
+        The number of frets that will be drawn on the diagram
+    :param lefty : bool
+        Indicates if the instrument is left-handed or not
+    :param width_nut : int
+        The width of the fretboard at the nut, in millimeters
+    :param width_twelve : int
+        The width of the fretboard at the twelfth fret, in millimeters
+    :param prefer_flats : bool
+        Indicates if the accidental notes are displayed as sharp or flats
+    :param uku_dots : bool
+        Will display ukulele markers intead of guitar ones if true
+    """
     # Pixels per mm
     PPMM = 8
     # Colors for each note
@@ -172,27 +197,50 @@ class Fretboard:
         self.fretted_notes = []
 
     def get_up_dir(self) -> int:
+        """Returns the multiplicative integer corresponding to the upper direction, dependinf on the lefty attribute
+        """
         return -1 if self.lefty else 1
 
     def get_origin_x(self) -> float:
+        """Returns the x coordinate of the nut
+        """
         return (self.get_length() + Fretboard.WIDTH_MARGIN) if self.lefty else (Fretboard.WIDTH_MARGIN + (2**(1/24) -1)*self.get_length())
 
     def get_origin_y(self) -> float:
+        """Returns the y coordinate of the nut
+        """
         return (0.5*(self.get_width_at(self.get_fret_pos(self.nb_frets))-self.width_nut) + Fretboard.HEIGHT_TITLE + Fretboard.HEIGHT_MARGIN)
 
     def get_fret_pos(self, fret:int) -> float:
+        """Returns distance in millimeters between the nut and a specific fret
+
+        :param fret : int
+            The fret whose position is to be known
+        """
         return self.scale*(1-(2**(-float(fret)/12)))
 
     def get_fret_slot_pos(self, fret:int) -> float:
+        """Returns distance in millimeters between the nut and a specific fret slot
+
+        :param fret : int
+            The fret whose slot position is to be known
+        """
         return self.scale*(1-(2**(-float(2*fret-1)/24)))
 
     def get_width_at(self, dist:float) -> float:
+        """Returns the width of the fretboard at a specific position
+
+        :param dist : float
+            The distance in millimeters at which the width is to be known
+        """
         # Height of the triangle formed by the two sides
         h = float(self.width_twelve*self.scale*0.5)/(self.width_twelve-self.width_nut)
         return float(self.width_twelve) * (h-self.scale*0.5+dist) / h
 
     def get_length(self):
-        return (1 - 2**(-self.nb_frets/12)) * self.scale
+        """Returns the total fretboard length
+        """
+        return self.get_fret_pos(self.nb_frets)
 
     def fret_all(self, accidental=False):
         """Adds all notes to the fretboard
@@ -210,16 +258,17 @@ class Fretboard:
         """Adds a fretted note to the fretboard
 
         :param arg : int, str, Note
-            Which fret is used OR
+            Which fret is used, 0 is the open string
             OR a str corresponding to a note such as 'A', 'C#', 'Db4'
             OR a Note object
         :param string : int, optionnal
-            Which string is used, all by default
+            Which string is used, all by default, 1 is the highest string
 
         examples:
-            fret(1, 4)
-            fret(3, 'Ab')
-            fret(0, Note('C#5'))
+            fret(4, 1)
+            fret('A#', 3)
+            fret('Bb4', 1)
+            fret(Note('C#5'), 4)
         """
         if string != 0:
             string_i = string - 1
@@ -244,7 +293,17 @@ class Fretboard:
             for i in range(1, 1+len(self.tuning)):
                 self.fret(arg, i)
 
+    def remove_notes():
+        """Removes all fretted notes from the fretboard
+        """
+        self.fretted_notes() = []
+
     def write_to_png(self, name="out.png") -> None:
+        """Exports the Fretboard to a '.png' file
+
+        :param name : str
+            The name of the output file
+        """
         WIDTH = int(Fretboard.PPMM*(self.get_length() + 2*Fretboard.WIDTH_MARGIN + (2**(1/24) -1)*self.get_length()))
         HEIGHT = int(Fretboard.PPMM*(self.get_width_at(self.get_fret_pos(self.nb_frets)) + 2*Fretboard.HEIGHT_MARGIN + Fretboard.HEIGHT_TITLE))
 
@@ -389,16 +448,31 @@ class Fretboard:
         # Finally save image
         surface.write_to_png(name)
 
+################################################################################
+
 if __name__ == '__main__':
-    fb = Fretboard(tuning=[Note('E4'),Note('B3'),Note('G3'),Note('D3'),Note('A2'),Note('D2')], nb_frets=24, lefty=True, prefer_flats=False,
-        #title='This is a very long title in order to show that the font is supposed to be smaller there'
-        )
-    fb.fret(3, 1)
-    fb.fret(3, 2)
-    fb.fret(3, 3)
-    fb.fret(5, 4)
-    fb.fret(5, 5)
-    fb.fret(3, 6)
-    fb.fret('E')
-    fb.fret_all()
-    fb.write_to_png()
+    # Creating a standard guitar fretboard, indeed right-handed, showing only four frets
+    fb = Fretboard(title = "Open C chord", nb_frets = 4)
+    # Printing the open C chord shape, using each string
+    fb.fret('E', 1) # Using only the note name
+    fb.fret(1, 2) # Using the fret number
+    fb.fret(0, 3) # Using the fret number, 0 for open string
+    fb.fret(2, 4) # Using the fret number
+    fb.fret('C3', 5) # Using the note name and specifying octave
+    # Saving image
+    fb.write_to_png("C_chord_image.png")
+
+    # Creating a left-handed bass guitar fretboard, in drop D tuning, showing all 21 frets
+    fb = Fretboard(tuning=[Note('G2'),Note('D2'),Note('A1'),Note('D1')], title = "Gm chord notes positions (LH)", nb_frets = 21, lefty = True, prefer_flats=True, width_nut=32, width_twelve=45)
+    # Printing each notes of a G minor chord on the whole neck
+    fb.fret('G') # Using only the note name, not specifying string
+    fb.fret('Bb') # Using only the note name, not specifying string
+    fb.fret('D') # Using only the note name, not specifying string
+    # Saving image
+    fb.write_to_png("bass_Gm_notes_LH.png")
+
+    # Creating a left-handed standard guitar fretboard
+    fb = Fretboard(title = 'Notes positions on the guitar fretboard (LH)', lefty = True)
+    # Adding all non-accidental notes to image
+    fb.fret_all(accidental=False)
+    fb.write_to_png("Fretboard_notes_LH.png")
